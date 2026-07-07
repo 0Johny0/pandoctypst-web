@@ -21,11 +21,16 @@ html,body{height:100%;overflow:hidden}
 body{background:var(--bg);color:var(--text);font-family:var(--font-mono);font-weight:300;font-size:13px;display:flex;flex-direction:column}
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E")}
 
-/* ── Workspace ── */
-.workspace{flex:1 1 0;min-height:0;min-width:0;display:flex;overflow:hidden}
+/* ── 顶层 Grid：侧栏 + 内容 ── */
+.workspace{
+  flex:1 1 0;min-height:0;
+  display:grid;
+  grid-template-columns:var(--sidebar-w) 1fr;
+  overflow:hidden;
+}
 
 /* ── Sidebar ── */
-.sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 .sidebar-head{padding:12px 14px 8px;display:flex;justify-content:space-between;align-items:center}
 .sidebar-head span{font-size:.65rem;letter-spacing:.18em;text-transform:uppercase;color:var(--text-muted)}
 .sidebar-head button{background:var(--accent);border:none;color:var(--bg);width:22px;height:22px;font-size:14px;font-weight:400;cursor:pointer;line-height:1;transition:background .2s}
@@ -39,8 +44,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 .file-item:hover .fdel{opacity:1}
 .file-item .fdel:hover{color:var(--error)}
 
-/* ── Content ── */
-.content{flex:1 1 0;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+/* ── Content 纵向布局 ── */
+.content{display:flex;flex-direction:column;overflow:hidden}
 
 /* ── Toolbar ── */
 .toolbar{height:var(--toolbar-h);min-height:var(--toolbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:6px;flex-shrink:0}
@@ -54,28 +59,39 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 .export-wrap select{background:var(--surface2);border:1px solid var(--border);border-right:none;color:var(--text);font-family:var(--font-mono);font-size:.72rem;padding:6px 8px;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none}
 .export-wrap select:focus{border-color:var(--accent)}
 .export-wrap .tb{border-left:1px solid var(--border)}
-.current-name{flex:0 1 auto;text-align:right;font-size:.75rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 8px;min-width:0}
+.current-name{flex:1 1 auto;text-align:right;font-size:.75rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 8px;min-width:0}
 
-/* ── Split: the key fix ── */
-.split{flex:1 1 0;min-height:0;min-width:0;display:flex;overflow:hidden}
+/* ── Split 用 Grid，两个 1fr 等分 ── */
+.split{
+  flex:1 1 0;min-height:0;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  overflow:hidden;
+}
 
 /* ── Editor pane ── */
-.editor-pane{flex:1 1 0;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.editor-pane{position:relative;overflow:hidden}
 
-/* ── CodeMirror overrides ── */
+/* ── CodeMirror 全部填满 ── */
 .editor-pane .CodeMirror{
-  position:absolute;
-  top:0;bottom:0;left:0;right:0;
+  position:absolute;top:0;left:0;right:0;bottom:0;
   font-family:var(--font-mono);font-size:13px;line-height:1.65;
   background:#0e0e0e;color:var(--text);
 }
-.editor-pane .CodeMirror,.editor-pane .CodeMirror-scroll{
+
+/* 关键：压制 CodeMirror 所有层级的最小宽度 */
+.editor-pane .CodeMirror,
+.editor-pane .CodeMirror-scroll,
+.editor-pane .CodeMirror-sizer,
+.editor-pane .CodeMirror-gutter,
+.editor-pane .CodeMirror-gutters,
+.editor-pane .CodeMirror-lines,
+.editor-pane .CodeMirror-code{
   min-width:0!important;
-  min-height:0;
 }
-.editor-pane .CodeMirror-scroll{
-  overflow:auto!important;
-}
+.editor-pane .CodeMirror-scroll{overflow:auto!important}
+.editor-pane .CodeMirror-hscrollbar{display:none!important}
+
 .CodeMirror-gutters{background:#121212;border-right:1px solid var(--border)}
 .CodeMirror-linenumber{color:#3e3a36}
 .CodeMirror-cursor{border-left:1px solid var(--accent)}
@@ -97,7 +113,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 .cm-s-typst span.cm-strong{font-weight:700}
 
 /* ── Preview ── */
-.preview-pane{flex:1 1 0;min-width:0;border-left:1px solid var(--border);background:var(--bg-deep);overflow-x:hidden;overflow-y:auto}
+.preview-pane{border-left:1px solid var(--border);background:var(--bg-deep);overflow-x:hidden;overflow-y:auto}
 .preview-pane .preview-content{padding:28px 32px;font-family:'Noto Serif CJK SC','Noto Serif',Georgia,serif;font-size:14px;line-height:1.8;color:var(--text);max-width:700px;overflow-wrap:break-word;word-break:break-word}
 .preview-pane .preview-content h1{font-family:var(--font-display);font-size:2rem;font-weight:300;color:var(--accent);margin:1.4em 0 .5em;letter-spacing:.03em}
 .preview-pane .preview-content h2{font-size:1.4rem;font-weight:300;color:var(--accent);margin:1.2em 0 .4em;border-bottom:1px solid var(--border);padding-bottom:4px}
@@ -115,8 +131,6 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 .preview-pane .preview-content th,.preview-pane .preview-content td{border:1px solid var(--border);padding:8px 12px;text-align:left}
 .preview-pane .preview-content th{background:var(--surface);font-weight:400}
 .preview-pane .preview-content hr{border:none;border-top:1px solid var(--border);margin:2em 0}
-
-/* ── Placeholder ── */
 .preview-placeholder{height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.8rem;letter-spacing:.1em}
 
 /* ── Error ── */
@@ -171,7 +185,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
       <div class="editor-pane" id="editorPane">
         <textarea id="code"></textarea>
       </div>
-      <div class="preview-pane" id="previewPane">
+      <div class="preview-pane">
         <div class="preview-placeholder" id="placeholder">按 Ctrl+S 保存并预览</div>
         <div class="preview-content" id="previewContent" style="display:none"></div>
       </div>
@@ -229,10 +243,6 @@ let currentFile=null,editor=null,previewTimer=null;
 const $=id=>document.getElementById(id);
 
 document.addEventListener('DOMContentLoaded',async()=>{
-  // 让 CodeMirror 填满 editor-pane
-  const pane=$('editorPane');
-  pane.style.position='relative';
-
   editor=CodeMirror.fromTextArea($('code'),{
     mode:'typst',theme:'typst',lineNumbers:true,matchBrackets:true,
     autoCloseBrackets:true,styleActiveLine:true,indentUnit:2,tabSize:2,
@@ -256,10 +266,11 @@ document.addEventListener('DOMContentLoaded',async()=>{
 
   await refreshFileList();
   editor.refresh();
-});
 
-// 窗口 resize 时刷新 CodeMirror
-window.addEventListener('resize',()=>{if(editor)editor.refresh()});
+  // 每次 CodeMirror 内部可能触发布局变化时强制刷新
+  const ro=new ResizeObserver(()=>editor.refresh());
+  ro.observe($('editorPane'));
+});
 
 function onEditorChange(){
   clearTimeout(previewTimer);
