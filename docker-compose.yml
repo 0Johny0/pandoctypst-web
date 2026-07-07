@@ -1,13 +1,11 @@
 services:
   pandoc-web:
     build: .
-    image: ghcr.io/pandoc-web:latest
     container_name: pandoc-web
     ports:
       - "5000:5000"
     volumes:
       - ./projects:/app/projects
-      - ./uploads:/app/uploads
       - /usr/share/fonts:/usr/share/fonts:ro
       # macOS 用下面两行替代上面一行：
       # - /System/Library/Fonts:/System/Library/Fonts:ro
