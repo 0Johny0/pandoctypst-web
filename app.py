@@ -224,7 +224,7 @@ def preview():
 
     return result.stdout, 200, {"Content-Type": "text/html; charset=utf-8"}
 
-# ── Preview (typst → PDF) ─────────────────────
+# ── Preview (typst → PDF) ─────────────────────────────
 
 @app.route("/api/preview-pdf", methods=["POST"])
 def preview_pdf():
@@ -234,18 +234,28 @@ def preview_pdf():
         return jsonify({"error": "文件不存在"}), 404
 
     stem = Path(filename).stem
-    pdf_path = OUTPUT / f"_preview_{stem}.pdf"
+    out_path = OUTPUT / f"{stem}_preview.pdf"
 
     result = subprocess.run(
-        ["typst", "compile", str(fp), str(pdf_path)],
+        ["typst", "compile", str(fp), str(out_path)],
         capture_output=True, text=True, timeout=30,
         env=_typst_env(),
     )
     if result.returncode != 0:
         return jsonify({"error": result.stderr.strip()})
 
-    ts = os.path.getmtime(pdf_path)
-    return jsonify({"url": f"/dl/{pdf_path.name}?t={ts}"})
+    return jsonify({
+        "success": True,
+        "url": f"/preview-dl/{stem}_preview.pdf",
+    })
+
+
+@app.route("/preview-dl/<path:filename>")
+def serve_preview(filename):
+    fp = OUTPUT / filename
+    if not fp.is_file():
+        return jsonify({"error": "Not found"}), 404
+    return send_file(fp, mimetype="application/pdf")
 
 # ── Export ─────────────────────────────────────────────
 
