@@ -20,8 +20,6 @@
 body{background:var(--bg);color:var(--text);font-family:var(--font-mono);font-weight:300;font-size:13px;overflow:hidden;height:100vh;display:flex;flex-direction:column}
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E")}
 
-/* ── 以下布局 CSS 与 V0 完全一致 ── */
-
 .workspace{flex:1;display:flex;min-height:0}
 
 .sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
@@ -221,6 +219,10 @@ document.addEventListener('DOMContentLoaded',async()=>{
   editor.on('cursorActivity',updateCursorPos);
   editor.on('change',onEditorChange);
 
+  $('btnSave').onclick=saveOnly;
+  $('btnPreview').onclick=saveAndPreview;
+  $('btnExport').onclick=doExport;
+  $('btnNew').onclick=showNewModal;
   $('btnUpload').onclick=()=>$('fileInput').click();
   $('fileInput').addEventListener('change',async()=>{
     const file=$('fileInput').files[0];
@@ -237,10 +239,6 @@ document.addEventListener('DOMContentLoaded',async()=>{
     }catch(e){setStatus('上传失败','error')}
     $('fileInput').value='';
   });
-  $('btnSave').onclick=saveOnly;
-  $('btnPreview').onclick=saveAndPreview;
-  $('btnExport').onclick=doExport;
-  $('btnNew').onclick=showNewModal;
   $('modalCancel').onclick=hideNewModal;
   $('modalOk').onclick=doCreateFile;
   $('newName').addEventListener('keydown',e=>{if(e.key==='Enter')doCreateFile();if(e.key==='Escape')hideNewModal()});
