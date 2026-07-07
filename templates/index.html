@@ -66,7 +66,16 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 /* ── Split ── */
 .split{flex:1;display:flex;min-height:0}
 .editor-pane{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
-.preview-pane{flex:1;border-left:1px solid var(--border);background:var(--bg-deep);position:relative;min-width:0;overflow-y:auto}
+
+/* ── Preview ── */
+.preview-pane{flex:1;border-left:1px solid var(--border);background:var(--bg-deep);display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.preview-head{height:32px;min-height:32px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:flex-end;padding:0 8px;gap:0;flex-shrink:0}
+.preview-head button{background:transparent;border:1px solid var(--border);color:var(--text-muted);font-family:var(--font-mono);font-size:.65rem;letter-spacing:.1em;padding:4px 12px;cursor:pointer;transition:all .2s}
+.preview-head button:first-child{border-right:none}
+.preview-head button:hover{color:var(--text)}
+.preview-head button.active{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.preview-body{flex:1;position:relative;overflow:auto;min-height:0}
+.preview-body iframe{background:#fff}
 .preview-pane .preview-content{padding:28px 32px;font-family:'Noto Serif CJK SC','Noto Serif',Georgia,serif;font-size:14px;line-height:1.8;color:var(--text);max-width:700px}
 .preview-pane .preview-content h1{font-family:var(--font-display);font-size:2rem;font-weight:300;color:var(--accent);margin:1.4em 0 .5em;letter-spacing:.03em}
 .preview-pane .preview-content h2{font-size:1.4rem;font-weight:300;color:var(--accent);margin:1.2em 0 .4em;border-bottom:1px solid var(--border);padding-bottom:4px}
@@ -84,7 +93,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 .preview-pane .preview-content th,.preview-pane .preview-content td{border:1px solid var(--border);padding:8px 12px;text-align:left}
 .preview-pane .preview-content th{background:var(--surface);font-weight:400}
 .preview-pane .preview-content hr{border:none;border-top:1px solid var(--border);margin:2em 0}
-.preview-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.8rem;letter-spacing:.1em}
+.preview-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.8rem;letter-spacing:.1em;z-index:1}
 
 /* ── CodeMirror ── */
 .editor-pane .CodeMirror{height:100%;font-family:var(--font-mono);font-size:13px;line-height:1.65;background:#0e0e0e;color:var(--text)}
@@ -183,8 +192,15 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
         <textarea id="code"></textarea>
       </div>
       <div class="preview-pane">
-        <div class="preview-placeholder" id="placeholder">按 Ctrl+S 保存并预览</div>
-        <div class="preview-content" id="previewContent" style="display:none"></div>
+        <div class="preview-head">
+          <button class="active" id="btnModeHtml" onclick="switchPreviewMode('html')">HTML</button>
+          <button id="btnModePdf" onclick="switchPreviewMode('pdf')">PDF</button>
+        </div>
+        <div class="preview-body">
+          <div class="preview-placeholder" id="placeholder">按 Ctrl+S 保存并预览</div>
+          <div class="preview-content" id="previewContent" style="display:none"></div>
+          <iframe id="previewPdf" style="display:none;width:100%;height:100%;border:none"></iframe>
+        </div>
       </div>
     </div>
 
@@ -236,7 +252,7 @@ CodeMirror.defineMode("typst",function(){
   }
 });
 
-let currentFile=null,editor=null,previewTimer=null;
+let currentFile=null,editor=null,previewTimer=null,previewMode='html';
 const $=id=>document.getElementById(id);
 
 document.addEventListener('DOMContentLoaded',async()=>{
@@ -315,6 +331,14 @@ function switchTab(tab){
   }
 }
 
+// ── Preview mode switch ────────────────────────────────
+function switchPreviewMode(mode){
+  previewMode=mode;
+  $('btnModeHtml').classList.toggle('active',mode==='html');
+  $('btnModePdf').classList.toggle('active',mode==='pdf');
+  doPreview();
+}
+
 // ── File list ──────────────────────────────────────────
 async function refreshFileList(select){
   const resp=await fetch('/api/files');
@@ -341,7 +365,7 @@ async function openFile(name){
   editor.setValue(data.content);
   editor.clearHistory();
   $('currentName').textContent=name;
-  clearError();hidePreview();
+  clearError();hideAllPreview();
   setStatus('已打开 '+name);
   await refreshFileList();
 }
@@ -366,9 +390,15 @@ async function saveAndPreview(){
   await doPreview();
 }
 
-// ── Preview ────────────────────────────────────────────
+// ── Preview dispatcher ─────────────────────────────────
 async function doPreview(){
   if(!currentFile)return;
+  if(previewMode==='html')await doHtmlPreview();
+  else await doPdfPreview();
+}
+
+// ── HTML preview ───────────────────────────────────────
+async function doHtmlPreview(){
   setStatus('渲染中…');
   try{
     const resp=await fetch('/api/preview',{
@@ -381,9 +411,30 @@ async function doPreview(){
       if(data.error){showError(data.error);setStatus('渲染失败','error');return}
     }
     if(!resp.ok){showError('渲染失败');setStatus('渲染失败','error');return}
+    $('previewPdf').style.display='none';
     $('previewContent').innerHTML=await resp.text();
-    showPreview();clearError();setStatus('预览已更新');
+    $('previewContent').style.display='block';
+    $('placeholder').style.display='none';
+    clearError();setStatus('预览已更新');
   }catch(e){showError(e.message);setStatus('渲染失败','error')}
+}
+
+// ── PDF preview ────────────────────────────────────────
+async function doPdfPreview(){
+  setStatus('编译 PDF 预览…');
+  try{
+    const resp=await fetch('/api/preview-pdf',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({filename:currentFile}),
+    });
+    const data=await resp.json();
+    if(data.error){showError(data.error);setStatus('编译失败','error');return}
+    $('previewContent').style.display='none';
+    $('previewPdf').src=data.url;
+    $('previewPdf').style.display='block';
+    $('placeholder').style.display='none';
+    clearError();setStatus('PDF 预览已更新');
+  }catch(e){showError(e.message);setStatus('编译失败','error')}
 }
 
 // ── Export ─────────────────────────────────────────────
@@ -428,7 +479,7 @@ async function doCreateFile(){
 async function deleteFile(name){
   if(!confirm(`确定删除 ${name} ？`))return;
   await fetch(`/api/file/${encodeURIComponent(name)}`,{method:'DELETE'});
-  if(currentFile===name){currentFile=null;editor.setValue('');$('currentName').textContent='未打开文件';hidePreview()}
+  if(currentFile===name){currentFile=null;editor.setValue('');$('currentName').textContent='未打开文件';hideAllPreview()}
   await refreshFileList();
 }
 
@@ -466,8 +517,13 @@ async function deleteImage(name){
 }
 
 // ── Helpers ────────────────────────────────────────────
-function showPreview(){$('previewContent').style.display='block';$('placeholder').style.display='none'}
-function hidePreview(){$('previewContent').style.display='none';$('placeholder').style.display='flex';$('previewContent').innerHTML=''}
+function hideAllPreview(){
+  $('previewContent').style.display='none';
+  $('previewPdf').style.display='none';
+  $('placeholder').style.display='flex';
+  $('previewContent').innerHTML='';
+  $('previewPdf').src='';
+}
 function showError(msg){$('errorPanel').style.display='block';$('errorText').textContent=msg}
 function clearError(){$('errorPanel').style.display='none';$('errorText').textContent=''}
 function setStatus(msg,type){const el=$('statusLeft');el.textContent=msg;el.style.color=type==='error'?'var(--error)':type==='success'?'var(--accent)':'var(--text-muted)'}
