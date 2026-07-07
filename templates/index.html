@@ -22,10 +22,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);font-we
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E")}
 
 /* ── Workspace ── */
-.workspace{flex:1;display:flex;min-height:0;min-width:0;overflow:hidden}
+.workspace{flex:1 1 0;min-height:0;min-width:0;display:flex;overflow:hidden}
 
 /* ── Sidebar ── */
-.sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);max-width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+.sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
 .sidebar-head{padding:12px 14px 8px;display:flex;justify-content:space-between;align-items:center}
 .sidebar-head span{font-size:.65rem;letter-spacing:.18em;text-transform:uppercase;color:var(--text-muted)}
 .sidebar-head button{background:var(--accent);border:none;color:var(--bg);width:22px;height:22px;font-size:14px;font-weight:400;cursor:pointer;line-height:1;transition:background .2s}
@@ -40,31 +40,42 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 .file-item .fdel:hover{color:var(--error)}
 
 /* ── Content ── */
-.content{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.content{flex:1 1 0;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 
 /* ── Toolbar ── */
-.toolbar{height:var(--toolbar-h);min-height:var(--toolbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:6px;flex-shrink:0;overflow:hidden}
-.tb{background:transparent;border:1px solid var(--border);color:var(--text-muted);font-family:var(--font-mono);font-size:.72rem;letter-spacing:.08em;padding:6px 14px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.toolbar{height:var(--toolbar-h);min-height:var(--toolbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:6px;flex-shrink:0}
+.tb{background:transparent;border:1px solid var(--border);color:var(--text-muted);font-family:var(--font-mono);font-size:.72rem;letter-spacing:.08em;padding:6px 14px;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
 .tb:hover{border-color:var(--accent);color:var(--text)}
 .tb.primary{background:var(--accent);border-color:var(--accent);color:var(--bg)}
 .tb.primary:hover{background:var(--accent-dim)}
 .tb:disabled{opacity:.3;cursor:not-allowed}
 .toolbar .sep{width:1px;height:20px;background:var(--border);margin:0 4px;flex-shrink:0}
-
-/* ── Export select ── */
-.export-wrap{display:flex;align-items:center;gap:0;flex-shrink:0}
+.export-wrap{display:flex;align-items:center;flex-shrink:0}
 .export-wrap select{background:var(--surface2);border:1px solid var(--border);border-right:none;color:var(--text);font-family:var(--font-mono);font-size:.72rem;padding:6px 8px;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none}
 .export-wrap select:focus{border-color:var(--accent)}
 .export-wrap .tb{border-left:1px solid var(--border)}
+.current-name{flex:0 1 auto;text-align:right;font-size:.75rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 8px;min-width:0}
 
-.current-name{flex:1;text-align:right;font-size:.75rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 8px;min-width:0}
+/* ── Split: the key fix ── */
+.split{flex:1 1 0;min-height:0;min-width:0;display:flex;overflow:hidden}
 
-/* ── Split ── */
-.split{flex:1;display:flex;min-height:0;min-width:0;overflow:hidden}
+/* ── Editor pane ── */
+.editor-pane{flex:1 1 0;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 
-/* ── Editor ── */
-.editor-pane{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;width:0}
-.editor-pane .CodeMirror{height:100%;width:100%;font-family:var(--font-mono);font-size:13px;line-height:1.65;background:#0e0e0e;color:var(--text);overflow:auto}
+/* ── CodeMirror overrides ── */
+.editor-pane .CodeMirror{
+  position:absolute;
+  top:0;bottom:0;left:0;right:0;
+  font-family:var(--font-mono);font-size:13px;line-height:1.65;
+  background:#0e0e0e;color:var(--text);
+}
+.editor-pane .CodeMirror,.editor-pane .CodeMirror-scroll{
+  min-width:0!important;
+  min-height:0;
+}
+.editor-pane .CodeMirror-scroll{
+  overflow:auto!important;
+}
 .CodeMirror-gutters{background:#121212;border-right:1px solid var(--border)}
 .CodeMirror-linenumber{color:#3e3a36}
 .CodeMirror-cursor{border-left:1px solid var(--accent)}
@@ -86,7 +97,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 .cm-s-typst span.cm-strong{font-weight:700}
 
 /* ── Preview ── */
-.preview-pane{flex:1;border-left:1px solid var(--border);background:var(--bg-deep);position:relative;min-width:0;overflow-x:hidden;overflow-y:auto;width:0}
+.preview-pane{flex:1 1 0;min-width:0;border-left:1px solid var(--border);background:var(--bg-deep);overflow-x:hidden;overflow-y:auto}
 .preview-pane .preview-content{padding:28px 32px;font-family:'Noto Serif CJK SC','Noto Serif',Georgia,serif;font-size:14px;line-height:1.8;color:var(--text);max-width:700px;overflow-wrap:break-word;word-break:break-word}
 .preview-pane .preview-content h1{font-family:var(--font-display);font-size:2rem;font-weight:300;color:var(--accent);margin:1.4em 0 .5em;letter-spacing:.03em}
 .preview-pane .preview-content h2{font-size:1.4rem;font-weight:300;color:var(--accent);margin:1.2em 0 .4em;border-bottom:1px solid var(--border);padding-bottom:4px}
@@ -104,14 +115,16 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 .preview-pane .preview-content th,.preview-pane .preview-content td{border:1px solid var(--border);padding:8px 12px;text-align:left}
 .preview-pane .preview-content th{background:var(--surface);font-weight:400}
 .preview-pane .preview-content hr{border:none;border-top:1px solid var(--border);margin:2em 0}
-.preview-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.8rem;letter-spacing:.1em}
+
+/* ── Placeholder ── */
+.preview-placeholder{height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.8rem;letter-spacing:.1em}
 
 /* ── Error ── */
 .error-panel{background:#1a0808;border-top:1px solid #400;max-height:140px;overflow-y:auto;padding:8px 14px;display:none;flex-shrink:0}
 .error-panel pre{font-family:var(--font-mono);font-size:.78rem;color:#f66;line-height:1.5;white-space:pre-wrap}
 
 /* ── Status bar ── */
-.status-bar{height:var(--statusbar-h);min-height:var(--statusbar-h);background:var(--surface);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;padding:0 14px;font-size:.7rem;color:var(--text-muted);flex-shrink:0;overflow:hidden}
+.status-bar{height:var(--statusbar-h);min-height:var(--statusbar-h);background:var(--surface);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;padding:0 14px;font-size:.7rem;color:var(--text-muted);flex-shrink:0}
 
 /* ── Modal ── */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:1000}
@@ -127,7 +140,6 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 <body>
 
 <div class="workspace">
-  <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-head">
       <span>Typst</span>
@@ -136,7 +148,6 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
     <div class="file-list" id="fileList"></div>
   </aside>
 
-  <!-- Main -->
   <div class="content">
     <div class="toolbar">
       <button class="tb" id="btnSave" title="保存 (Ctrl+S)">保存</button>
@@ -157,10 +168,10 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
     </div>
 
     <div class="split">
-      <div class="editor-pane">
+      <div class="editor-pane" id="editorPane">
         <textarea id="code"></textarea>
       </div>
-      <div class="preview-pane">
+      <div class="preview-pane" id="previewPane">
         <div class="preview-placeholder" id="placeholder">按 Ctrl+S 保存并预览</div>
         <div class="preview-content" id="previewContent" style="display:none"></div>
       </div>
@@ -170,13 +181,11 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
   </div>
 </div>
 
-<!-- Status bar -->
 <div class="status-bar">
   <span id="statusLeft">就绪</span>
   <span id="statusRight"></span>
 </div>
 
-<!-- New file modal -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
     <h3>新建文件</h3>
@@ -220,6 +229,10 @@ let currentFile=null,editor=null,previewTimer=null;
 const $=id=>document.getElementById(id);
 
 document.addEventListener('DOMContentLoaded',async()=>{
+  // 让 CodeMirror 填满 editor-pane
+  const pane=$('editorPane');
+  pane.style.position='relative';
+
   editor=CodeMirror.fromTextArea($('code'),{
     mode:'typst',theme:'typst',lineNumbers:true,matchBrackets:true,
     autoCloseBrackets:true,styleActiveLine:true,indentUnit:2,tabSize:2,
@@ -242,10 +255,11 @@ document.addEventListener('DOMContentLoaded',async()=>{
   $('modalBg').addEventListener('click',e=>{if(e.target===$('modalBg'))hideNewModal()});
 
   await refreshFileList();
-
-  // 延迟刷新 CodeMirror，确保 flex 布局计算完成后再刷新一次
-  setTimeout(()=>editor.refresh(),100);
+  editor.refresh();
 });
+
+// 窗口 resize 时刷新 CodeMirror
+window.addEventListener('resize',()=>{if(editor)editor.refresh()});
 
 function onEditorChange(){
   clearTimeout(previewTimer);
@@ -304,7 +318,7 @@ async function saveAndPreview(){
   await doPreview();
 }
 
-// ── Preview (pandoc typst → HTML, 实时) ───────────────
+// ── Preview ────────────────────────────────────────────
 async function doPreview(){
   if(!currentFile)return;
   setStatus('渲染中…');
@@ -329,12 +343,10 @@ async function doExport(){
   if(!currentFile){setStatus('没有打开的文件','error');return}
   const fmt=$('exportFmt').value;
   const fmtNames={pdf:'PDF',epub:'EPUB',html:'HTML',docx:'DOCX',md:'Markdown',latex:'LaTeX'};
-
   await fetch(`/api/file/${encodeURIComponent(currentFile)}`,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({content:editor.getValue()}),
   });
-
   setStatus(`编译 ${fmtNames[fmt]} 中…`);
   $('btnExport').disabled=true;
   try{
