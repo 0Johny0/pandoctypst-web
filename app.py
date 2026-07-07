@@ -72,34 +72,47 @@ def _resolve_includes(filepath, depth=0, seen=None):
 def _extract_meta(content):
     """
     从 #set document(...) 中提取 title 和 author。
-    使用手动括号匹配，正确处理嵌套括号。
+    逐行收集、括号深度跟踪，兼容直引号和弯引号。
     """
     title, author = "", ""
-    m = re.search(r'#set\s+document\s*$$', content)
-    if m:
-        start = m.end()
-        depth, pos = 1, start
-        while pos < len(content) and depth > 0:
-            ch = content[pos]
-            if ch == '(':
-                depth += 1
-            elif ch == ')':
-                depth -= 1
-            pos += 1
-        if depth == 0:
-            block = content[start:pos - 1]
-            tm = re.search(r'title:\s*"([^"]*)"', block)
-            if tm:
-                title = tm.group(1)
-            am = re.search(r'author:\s*"([^"]*)"', block)
-            if not am:
-                am = re.search(r'author:\s*\(([^)]*)$$', block)
-            if am:
-                author = '、'.join(re.findall(r'"([^"]*)"', am.group(1)))
+    Q = r'[\u201c\u201d"]'
+    NQ = r'[^\u201c\u201d"]'
+    in_doc, depth, buf = False, 0, []
+
+    for line in content.splitlines():
+        s = line.strip()
+        if not in_doc:
+            if re.match(r'#set\s+document\s*$$', s):
+                in_doc = True
+                depth = s.count('(') - s.count(')')
+                buf.append(s)
+                if depth <= 0:
+                    break
+            continue
+        depth += s.count('(') - s.count(')')
+        buf.append(s)
+        if depth <= 0:
+            break
+
+    block = '\n'.join(buf)
+
+    tm = re.search(rf'title:\s*{Q}({NQ}*){Q}', block)
+    if tm:
+        title = tm.group(1)
+
+    am = re.search(rf'author:\s*{Q}({NQ}*){Q}', block)
+    if am:
+        author = am.group(1)
+    else:
+        am = re.search(r'author:\s*\(([^)]*)$$', block)
+        if am:
+            author = '、'.join(re.findall(rf'{Q}({NQ}*){Q}', am.group(1)))
+
     if not title:
         hm = re.search(r'^=\s+(.+)$', content, re.MULTILINE)
         if hm:
             title = hm.group(1).strip()
+
     return title, author
 
 
