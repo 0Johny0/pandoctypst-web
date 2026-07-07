@@ -375,7 +375,7 @@ def export():
         pandoc_args = [
             "pandoc", "-f", "typst", "-o", str(out_path),
             "--toc",
-            "--toc-title=目录",
+            "--metadata", "toc-title=目录",
             "--epub-title-page=false",
             "--epub-metadata", str(epub_meta),
             "--css", str(epub_css),
