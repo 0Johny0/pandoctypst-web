@@ -69,9 +69,28 @@ def _resolve_includes(filepath, depth=0, seen=None):
     return "\n".join(lines)
 
 
-def _extract_title(content):
-    m = re.search(r'^=\s+(.+)$', content, re.MULTILINE)
-    return m.group(1).strip() if m else ""
+def _extract_meta(content):
+    """
+    从 #set document(...) 中提取 title 和 author。
+    回退: title → 第一个 = 标题; author → 空字符串。
+    """
+    title, author = "", ""
+    m = re.search(r'#set\s+document$$(.+?)$$', content, re.DOTALL)
+    if m:
+        block = m.group(1)
+        tm = re.search(r'title:\s*"([^"]*)"', block)
+        if tm:
+            title = tm.group(1)
+        am = re.search(r'author:\s*"([^"]*)"', block)
+        if not am:
+            am = re.search(r'author:\s*$$([^)]*)$$', block)
+        if am:
+            author = '、'.join(re.findall(r'"([^"]*)"', am.group(1)))
+    if not title:
+        hm = re.search(r'^=\s+(.+)$', content, re.MULTILINE)
+        if hm:
+            title = hm.group(1).strip()
+    return title, author
 
 
 def _extract_cover_image(content, base_dir):
@@ -265,12 +284,12 @@ def serve_preview(filename):
 # ── Export ────────────────────────────────────────────
 
 EXPORT_CONFIG = {
-    "pdf":   {"ext": "pdf",  "mime": "application/pdf"},
-    "epub":  {"ext": "epub", "mime": "application/epub+zip"},
-    "html":  {"ext": "html", "mime": "text/html; charset=utf-8"},
-    "docx":  {"ext": "docx", "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
-    "md":    {"ext": "md",   "mime": "text/markdown; charset=utf-8"},
-    "latex": {"ext": "tex",  "mime": "application/x-tex; charset=utf-8"},
+    "pdf":   {"ext": "pdf",   "mime": "application/pdf"},
+    "epub":  {"ext": "epub",  "mime": "application/epub+zip"},
+    "html":  {"ext": "html",  "mime": "text/html; charset=utf-8"},
+    "docx":  {"ext": "docx",  "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+    "md":    {"ext": "md",    "mime": "text/markdown; charset=utf-8"},
+    "latex": {"ext": "tex",   "mime": "application/x-tex; charset=utf-8"},
 }
 
 
@@ -284,29 +303,22 @@ def export():
     if target not in EXPORT_CONFIG:
         return jsonify({"error": f"不支持: {target}"}), 400
 
-    stem = Path(filename).stem
     cfg = EXPORT_CONFIG[target]
+    raw = fp.read_text("utf-8")
+    meta_title, meta_author = _extract_meta(raw)
+    meta_title = meta_title or Path(filename).stem
+    safe_name = _sanitize_filename(meta_title)
+    out_path = OUTPUT / f"{safe_name}.{cfg['ext']}"
 
     # ── PDF ──
     if target == "pdf":
-        out_path = OUTPUT / f"{stem}.{cfg['ext']}"
         result = subprocess.run(
             ["typst", "compile", str(fp), str(out_path)],
             capture_output=True, text=True, timeout=30, env=_typst_env(),
         )
-        if result.returncode != 0:
-            return jsonify({"success": False, "error": result.stderr.strip()})
-        return jsonify({
-            "success": True,
-            "url": f"/dl/{stem}.{cfg['ext']}",
-            "filename": f"{stem}.{cfg['ext']}",
-        })
 
     # ── EPUB ──
-    if target == "epub":
-        raw = fp.read_text("utf-8")
-        meta_title = _extract_title(raw) or stem
-        safe_name = _sanitize_filename(meta_title)
+    elif target == "epub":
         cover_img = _extract_cover_image(raw, fp.parent)
         clean = _strip_typst_directives(_resolve_includes(fp))
 
@@ -319,7 +331,6 @@ def export():
             encoding="utf-8",
         )
 
-        out_path = OUTPUT / f"{safe_name}.{cfg['ext']}"
         args = [
             "pandoc", "-f", "typst", "-o", str(out_path),
             "--toc",
@@ -329,35 +340,31 @@ def export():
             "--css", str(epub_css),
             f"--resource-path={fp.parent}",
         ]
+        if meta_author:
+            args += ["--metadata", f"creator={meta_author}"]
         if cover_img:
             args += ["--epub-cover-image", str(cover_img)]
 
         result = subprocess.run(
             args, input=clean, capture_output=True, text=True, timeout=30,
         )
-        if result.returncode != 0:
-            return jsonify({"success": False, "error": result.stderr.strip()})
-        return jsonify({
-            "success": True,
-            "url": f"/dl/{safe_name}.{cfg['ext']}",
-            "filename": f"{safe_name}.{cfg['ext']}",
-        })
 
     # ── 其他格式 ──
-    out_path = OUTPUT / f"{stem}.{cfg['ext']}"
-    args = ["pandoc", str(fp), "-o", str(out_path)]
-    if target == "html":
-        args += ["--syntax-highlighting=tango", "--metadata", f"title={stem}"]
-    elif target == "md":
-        args += ["--wrap=none"]
-    result = subprocess.run(args, capture_output=True, text=True, timeout=30)
+    else:
+        args = ["pandoc", str(fp), "-o", str(out_path)]
+        if target == "html":
+            args += ["--syntax-highlighting=tango", "--metadata", f"title={meta_title}"]
+        elif target == "md":
+            args += ["--wrap=none"]
+        result = subprocess.run(args, capture_output=True, text=True, timeout=30)
 
     if result.returncode != 0:
         return jsonify({"success": False, "error": result.stderr.strip()})
+
     return jsonify({
         "success": True,
-        "url": f"/dl/{stem}.{cfg['ext']}",
-        "filename": f"{stem}.{cfg['ext']}",
+        "url": f"/dl/{safe_name}.{cfg['ext']}",
+        "filename": f"{safe_name}.{cfg['ext']}",
     })
 
 
@@ -369,7 +376,8 @@ def serve_output(filename):
     if not fp.is_file():
         return jsonify({"error": "Not found"}), 404
     mime_map = {
-        ".pdf": "application/pdf", ".epub": "application/epub+zip",
+        ".pdf": "application/pdf",
+        ".epub": "application/epub+zip",
         ".html": "text/html; charset=utf-8",
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         ".md": "text/markdown; charset=utf-8",
