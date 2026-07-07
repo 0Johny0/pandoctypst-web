@@ -84,13 +84,19 @@ def _resolve_includes(filepath, depth=0, seen=None):
     return "\n".join(lines)
 
 
+def _extract_title(content):
+    """从 Typst 源码提取第一个一级标题"""
+    m = re.search(r'^=\s+(.+)$', content, re.MULTILINE)
+    return m.group(1).strip() if m else ""
+
+
 # ── Page ───────────────────────────────────────────────
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
-# ── Image API ───────────────────────────────────────────────
+# ── Image API ─────────────────────────────────────────
 
 @app.route("/images/<path:filename>")
 def serve_images(filename):
@@ -99,7 +105,7 @@ def serve_images(filename):
         return jsonify({"error": "Not found"}), 404
     return send_file(fp)
 
-# ── File API ───────────────────────────────────────────
+# ── File API ──────────────────────────────────────────
 
 @app.route("/api/files")
 def list_files():
@@ -165,7 +171,7 @@ def upload_file():
     return jsonify({"success": True, "filename": name})
 
 
-# ── Image API ──────────────────────────────────────────
+# ── Image API ─────────────────────────────────────────
 
 ALLOWED_IMG = {".png", ".jpg", ".jpeg", ".svg", ".pdf", ".gif", ".webp"}
 
@@ -224,7 +230,8 @@ def preview():
 
     return result.stdout, 200, {"Content-Type": "text/html; charset=utf-8"}
 
-# ── Preview (typst → PDF) ─────────────────────────────
+
+# ── PDF Preview ───────────────────────────────────────
 
 @app.route("/api/preview-pdf", methods=["POST"])
 def preview_pdf():
@@ -257,7 +264,8 @@ def serve_preview(filename):
         return jsonify({"error": "Not found"}), 404
     return send_file(fp, mimetype="application/pdf")
 
-# ── Export ─────────────────────────────────────────────
+
+# ── Export ────────────────────────────────────────────
 
 EXPORT_CONFIG = {
     "pdf":   {"ext": "pdf",  "mime": "application/pdf"},
@@ -273,7 +281,6 @@ EXPORT_CONFIG = {
 def export():
     filename = request.json.get("filename", "")
     target = request.json.get("target", "")
-    title = request.json.get("title", "")
 
     fp = PROJECTS / filename
     if not fp.is_file():
@@ -284,7 +291,6 @@ def export():
     stem = Path(filename).stem
     cfg = EXPORT_CONFIG[target]
     out_path = OUTPUT / f"{stem}.{cfg['ext']}"
-    doc_title = title or stem
 
     if target == "pdf":
         result = subprocess.run(
@@ -294,13 +300,21 @@ def export():
         )
     else:
         pandoc_args = ["pandoc", str(fp), "-o", str(out_path)]
+
         if target == "epub":
-            pandoc_args += ["--toc", "--metadata", f"title={doc_title}"]
+            content_text = fp.read_text("utf-8")
+            meta_title = _extract_title(content_text) or stem
+            pandoc_args += [
+                "--toc",
+                "--epub-title-page=false",
+                "--metadata", f"title={meta_title}",
+            ]
         elif target == "html":
             pandoc_args += ["--syntax-highlighting=tango",
-                            "--metadata", f"title={doc_title}"]
+                            "--metadata", f"title={stem}"]
         elif target == "md":
             pandoc_args += ["--wrap=none"]
+
         result = subprocess.run(
             pandoc_args,
             capture_output=True, text=True, timeout=30,
@@ -316,7 +330,7 @@ def export():
     })
 
 
-# ── Serve download ─────────────────────────────────────
+# ── Serve download ────────────────────────────────────
 
 @app.route("/dl/<path:filename>")
 def serve_output(filename):
