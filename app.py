@@ -8,8 +8,10 @@ app = Flask(__name__)
 
 PROJECTS = Path("/app/projects")
 OUTPUT = Path("/app/output")
+IMAGES = PROJECTS / "images"
 PROJECTS.mkdir(exist_ok=True)
 OUTPUT.mkdir(exist_ok=True)
+IMAGES.mkdir(exist_ok=True)
 
 DEFAULT_TYPST = """\
 #set page(width: 10cm, height: auto)
@@ -153,6 +155,41 @@ def upload_file():
     content = file.read().decode("utf-8")
     (PROJECTS / name).write_text(content, "utf-8")
     return jsonify({"success": True, "filename": name})
+
+
+# ── Image API ──────────────────────────────────────────
+
+ALLOWED_IMG = {".png", ".jpg", ".jpeg", ".svg", ".pdf", ".gif", ".webp"}
+
+
+@app.route("/api/images")
+def list_images():
+    files = []
+    for f in sorted(IMAGES.glob("*")):
+        if f.suffix.lower() in ALLOWED_IMG:
+            files.append({"name": f.name, "size": f.stat().st_size})
+    return jsonify(files)
+
+
+@app.route("/api/upload-image", methods=["POST"])
+def upload_image():
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return jsonify({"error": "请选择文件"}), 400
+    name = Path(file.filename).name
+    ext = Path(name).suffix.lower()
+    if ext not in ALLOWED_IMG:
+        return jsonify({"error": "不支持的图片格式"}), 400
+    file.save(IMAGES / name)
+    return jsonify({"success": True, "filename": name, "path": f"images/{name}"})
+
+
+@app.route("/api/image/<path:filename>", methods=["DELETE"])
+def delete_image(filename):
+    fp = IMAGES / Path(filename).name
+    if fp.is_file():
+        fp.unlink()
+    return jsonify({"success": True})
 
 
 # ── Preview (pandoc typst → HTML) ─────────────────────
