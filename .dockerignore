@@ -3,5 +3,3 @@
 .gitignore
 README.md
 docker-compose.yml
-*.md
-!requirements.txt
