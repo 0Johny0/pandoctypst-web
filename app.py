@@ -36,75 +36,55 @@ if not any(PROJECTS.glob("*.typ")):
 
 def _typst_env():
     env = {**os.environ}
-    env["TYPST_FONT_PATHS"] = os.environ.get(
-        "TYPST_FONT_PATHS", "/usr/share/fonts"
-    )
+    env["TYPST_FONT_PATHS"] = os.environ.get("TYPST_FONT_PATHS", "/usr/share/fonts")
     return env
 
 
 def _resolve_includes(filepath, depth=0, seen=None):
-    """递归展开 Typst 的 #include 和 #import"""
     if depth > 10:
         return ""
     if seen is None:
         seen = set()
-
     resolved = filepath.resolve()
     if resolved in seen:
         return f"// [skip] 循环引用: {resolved.name}"
     seen.add(resolved)
-
     if not filepath.is_file():
         return f"// [error] 文件不存在: {filepath.name}"
-
     base_dir = filepath.parent
     lines = []
-
     for line in filepath.read_text("utf-8").splitlines():
         stripped = line.strip()
-
         if stripped.startswith("#include"):
             m = re.match(r'#include\s+"([^"]+)"', stripped)
             if m:
-                inc_path = base_dir / m.group(1)
-                lines.append(_resolve_includes(inc_path, depth + 1, seen))
+                lines.append(_resolve_includes(base_dir / m.group(1), depth + 1, seen))
                 continue
-
         if stripped.startswith("#import"):
             m = re.match(r'#import\s+"([^"]+)"', stripped)
             if m:
-                imp_path = base_dir / m.group(1)
-                lines.append(_resolve_includes(imp_path, depth + 1, seen))
+                lines.append(_resolve_includes(base_dir / m.group(1), depth + 1, seen))
                 continue
-
         lines.append(line)
-
     return "\n".join(lines)
 
 
 def _extract_title(content):
-    """从 Typst 源码提取第一个一级标题"""
     m = re.search(r'^=\s+(.+)$', content, re.MULTILINE)
     return m.group(1).strip() if m else ""
 
 
 def _extract_cover_image(content, base_dir):
-    """
-    从 Typst 源码中提取第一个 image() 引用的图片路径。
-    匹配模式: image("path/to/img.jpg") 或 image("path", ...)
-    """
-    matches = re.findall(r'image\(\s*"([^"]+)"', content)
-    for match in matches:
+    IMG_EXTS = {".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp"}
+    for match in re.findall(r'image\(\s*"([^"]+)"', content):
         img_path = (base_dir / match).resolve()
-        if img_path.is_file() and img_path.suffix.lower() in ALLOWED_IMG:
+        if img_path.is_file() and img_path.suffix.lower() in IMG_EXTS:
             return img_path
     return None
 
 
 def _strip_typst_directives(content):
-    """剥离 #set 指令（含多行括号），消除 pandoc EPUB 输出中的空白章节"""
-    out = []
-    paren_depth = 0
+    out, paren_depth = [], 0
     for line in content.splitlines():
         stripped = line.strip()
         if paren_depth > 0:
@@ -118,16 +98,12 @@ def _strip_typst_directives(content):
                 paren_depth = d
             continue
         out.append(line)
-    text = '\n'.join(out)
-    return re.sub(r'\n{3,}', '\n\n', text).strip()
+    return re.sub(r'\n{3,}', '\n\n', '\n'.join(out)).strip()
 
 
-def _esc_xml(s):
-    """XML 特殊字符转义"""
-    return (s.replace('&', '&amp;')
-             .replace('<', '&lt;')
-             .replace('>', '&gt;')
-             .replace('"', '&quot;'))
+def _sanitize_filename(name):
+    name = re.sub(r'[/\\:*?"<>|\x00-\x1f]', '_', name)
+    return name.strip('. ')[:200] or 'untitled'
 
 
 # ── Page ───────────────────────────────────────────────
@@ -137,7 +113,7 @@ def index():
     return render_template("index.html")
 
 
-# ── Image API ─────────────────────────────────────────
+# ── Image API (serve) ─────────────────────────────────
 
 @app.route("/images/<path:filename>")
 def serve_images(filename):
@@ -151,15 +127,10 @@ def serve_images(filename):
 
 @app.route("/api/files")
 def list_files():
-    files = []
-    for f in sorted(PROJECTS.glob("*.typ")):
-        s = f.stat()
-        files.append({
-            "name": f.name,
-            "size": s.st_size,
-            "modified": s.st_mtime,
-        })
-    return jsonify(files)
+    return jsonify([
+        {"name": f.name, "size": f.stat().st_size, "modified": f.stat().st_mtime}
+        for f in sorted(PROJECTS.glob("*.typ"))
+    ])
 
 
 @app.route("/api/file/<path:filename>", methods=["GET"])
@@ -175,8 +146,7 @@ def save_file(filename):
     name = Path(filename).name
     if not name.endswith(".typ"):
         name += ".typ"
-    content = request.json.get("content", "")
-    (PROJECTS / name).write_text(content, "utf-8")
+    (PROJECTS / name).write_text(request.json.get("content", ""), "utf-8")
     return jsonify({"success": True, "filename": name})
 
 
@@ -208,23 +178,21 @@ def upload_file():
     name = Path(file.filename).name
     if not name.endswith(".typ"):
         return jsonify({"error": "仅支持 .typ 文件"}), 400
-    content = file.read().decode("utf-8")
-    (PROJECTS / name).write_text(content, "utf-8")
+    (PROJECTS / name).write_text(file.read().decode("utf-8"), "utf-8")
     return jsonify({"success": True, "filename": name})
 
 
-# ── Image API ─────────────────────────────────────────
+# ── Image API (manage) ────────────────────────────────
 
 ALLOWED_IMG = {".png", ".jpg", ".jpeg", ".svg", ".pdf", ".gif", ".webp"}
 
 
 @app.route("/api/images")
 def list_images():
-    files = []
-    for f in sorted(IMAGES.glob("*")):
-        if f.suffix.lower() in ALLOWED_IMG:
-            files.append({"name": f.name, "size": f.stat().st_size})
-    return jsonify(files)
+    return jsonify([
+        {"name": f.name, "size": f.stat().st_size}
+        for f in sorted(IMAGES.glob("*")) if f.suffix.lower() in ALLOWED_IMG
+    ])
 
 
 @app.route("/api/upload-image", methods=["POST"])
@@ -233,8 +201,7 @@ def upload_image():
     if not file or not file.filename:
         return jsonify({"error": "请选择文件"}), 400
     name = Path(file.filename).name
-    ext = Path(name).suffix.lower()
-    if ext not in ALLOWED_IMG:
+    if Path(name).suffix.lower() not in ALLOWED_IMG:
         return jsonify({"error": "不支持的图片格式"}), 400
     file.save(IMAGES / name)
     return jsonify({"success": True, "filename": name, "path": f"images/{name}"})
@@ -248,7 +215,7 @@ def delete_image(filename):
     return jsonify({"success": True})
 
 
-# ── Preview (pandoc typst → HTML) ─────────────────────
+# ── Preview (HTML) ────────────────────────────────────
 
 @app.route("/api/preview", methods=["POST"])
 def preview():
@@ -256,24 +223,19 @@ def preview():
     fp = PROJECTS / filename
     if not fp.is_file():
         return jsonify({"error": "文件不存在"}), 404
-
     content = _resolve_includes(fp)
     result = subprocess.run(
         ["pandoc", "-f", "typst", "-t", "html5",
          "--wrap=none", "--syntax-highlighting=tango",
          f"--resource-path={fp.parent}"],
-        input=content,
-        capture_output=True,
-        text=True,
-        timeout=10,
+        input=content, capture_output=True, text=True, timeout=10,
     )
     if result.returncode != 0:
         return jsonify({"error": result.stderr.strip()})
-
     return result.stdout, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
-# ── PDF Preview ───────────────────────────────────────
+# ── Preview (PDF) ─────────────────────────────────────
 
 @app.route("/api/preview-pdf", methods=["POST"])
 def preview_pdf():
@@ -281,22 +243,15 @@ def preview_pdf():
     fp = PROJECTS / filename
     if not fp.is_file():
         return jsonify({"error": "文件不存在"}), 404
-
     stem = Path(filename).stem
     out_path = OUTPUT / f"{stem}_preview.pdf"
-
     result = subprocess.run(
         ["typst", "compile", str(fp), str(out_path)],
-        capture_output=True, text=True, timeout=30,
-        env=_typst_env(),
+        capture_output=True, text=True, timeout=30, env=_typst_env(),
     )
     if result.returncode != 0:
         return jsonify({"error": result.stderr.strip()})
-
-    return jsonify({
-        "success": True,
-        "url": f"/preview-dl/{stem}_preview.pdf",
-    })
+    return jsonify({"success": True, "url": f"/preview-dl/{stem}_preview.pdf"})
 
 
 @app.route("/preview-dl/<path:filename>")
@@ -323,7 +278,6 @@ EXPORT_CONFIG = {
 def export():
     filename = request.json.get("filename", "")
     target = request.json.get("target", "")
-
     fp = PROJECTS / filename
     if not fp.is_file():
         return jsonify({"error": "文件不存在"}), 404
@@ -332,81 +286,74 @@ def export():
 
     stem = Path(filename).stem
     cfg = EXPORT_CONFIG[target]
-    out_path = OUTPUT / f"{stem}.{cfg['ext']}"
 
+    # ── PDF ──
     if target == "pdf":
+        out_path = OUTPUT / f"{stem}.{cfg['ext']}"
         result = subprocess.run(
             ["typst", "compile", str(fp), str(out_path)],
-            capture_output=True, text=True, timeout=30,
-            env=_typst_env(),
+            capture_output=True, text=True, timeout=30, env=_typst_env(),
         )
+        if result.returncode != 0:
+            return jsonify({"success": False, "error": result.stderr.strip()})
+        return jsonify({
+            "success": True,
+            "url": f"/dl/{stem}.{cfg['ext']}",
+            "filename": f"{stem}.{cfg['ext']}",
+        })
 
-    elif target == "epub":
-        # 1. 读取原始内容，提取标题和封面图
-        raw_content = fp.read_text("utf-8")
-        meta_title = _extract_title(raw_content) or stem
-        cover_img = _extract_cover_image(raw_content, fp.parent)
+    # ── EPUB ──
+    if target == "epub":
+        raw = fp.read_text("utf-8")
+        meta_title = _extract_title(raw) or stem
+        safe_name = _sanitize_filename(meta_title)
+        cover_img = _extract_cover_image(raw, fp.parent)
+        clean = _strip_typst_directives(_resolve_includes(fp))
 
-        # 2. 展开 include/import，剥离 #set 指令
-        resolved = _resolve_includes(fp)
-        clean_content = _strip_typst_directives(resolved)
-
-        # 3. 写入 EPUB 元数据 XML
-        epub_meta = OUTPUT / "_epub_meta.xml"
-        epub_meta.write_text(
-            f'<dc:title>{_esc_xml(meta_title)}</dc:title>\n',
-            encoding="utf-8",
-        )
-
-        # 4. 写入自定义 CSS
         epub_css = OUTPUT / "_epub_style.css"
         epub_css.write_text(
-            "body { margin: 1em; }\n"
-            "h1 { page-break-before: auto !important; "
-            "page-break-after: avoid; }\n"
-            "h2, h3, h4 { page-break-before: auto; }\n"
-            "section { page-break-before: auto !important; }\n"
-            "nav#toc { page-break-before: auto; "
-            "page-break-after: auto; }\n",
+            "body{margin:1em}\n"
+            "h1{page-break-before:auto!important;page-break-after:avoid}\n"
+            "h2,h3,h4{page-break-before:auto}\n"
+            "section{page-break-before:auto!important}\n",
             encoding="utf-8",
         )
 
-        # 5. 组装 pandoc 参数
-        pandoc_args = [
+        out_path = OUTPUT / f"{safe_name}.{cfg['ext']}"
+        args = [
             "pandoc", "-f", "typst", "-o", str(out_path),
             "--toc",
             "--metadata", "toc-title=目录",
+            "--metadata", f"title={meta_title}",
             "--epub-title-page=false",
-            "--epub-metadata", str(epub_meta),
             "--css", str(epub_css),
             f"--resource-path={fp.parent}",
         ]
-
-        # 6. 有封面图则加入参数
         if cover_img:
-            pandoc_args += ["--epub-cover-image", str(cover_img)]
+            args += ["--epub-cover-image", str(cover_img)]
 
         result = subprocess.run(
-            pandoc_args,
-            input=clean_content,
-            capture_output=True, text=True, timeout=30,
+            args, input=clean, capture_output=True, text=True, timeout=30,
         )
+        if result.returncode != 0:
+            return jsonify({"success": False, "error": result.stderr.strip()})
+        return jsonify({
+            "success": True,
+            "url": f"/dl/{safe_name}.{cfg['ext']}",
+            "filename": f"{safe_name}.{cfg['ext']}",
+        })
 
-    else:
-        pandoc_args = ["pandoc", str(fp), "-o", str(out_path)]
-        if target == "html":
-            pandoc_args += ["--syntax-highlighting=tango",
-                            "--metadata", f"title={stem}"]
-        elif target == "md":
-            pandoc_args += ["--wrap=none"]
-        result = subprocess.run(
-            pandoc_args,
-            capture_output=True, text=True, timeout=30,
-        )
+    # ── 其他格式 ──
+    out_path = OUTPUT / f"{stem}.{cfg['ext']}"
+    args = ["pandoc", str(fp), "-o", str(out_path)]
+    if target == "html":
+        args += ["--syntax-highlighting=tango", "--metadata", f"title={stem}"]
+    elif target == "md":
+        args += ["--wrap=none"]
+    result = subprocess.run(args, capture_output=True, text=True, timeout=30)
 
     if result.returncode != 0:
         return jsonify({"success": False, "error": result.stderr.strip()})
-
     return jsonify({
         "success": True,
         "url": f"/dl/{stem}.{cfg['ext']}",
@@ -421,17 +368,15 @@ def serve_output(filename):
     fp = OUTPUT / filename
     if not fp.is_file():
         return jsonify({"error": "Not found"}), 404
-    ext = fp.suffix.lower()
     mime_map = {
-        ".pdf": "application/pdf",
-        ".epub": "application/epub+zip",
+        ".pdf": "application/pdf", ".epub": "application/epub+zip",
         ".html": "text/html; charset=utf-8",
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         ".md": "text/markdown; charset=utf-8",
         ".tex": "application/x-tex; charset=utf-8",
     }
-    mime = mime_map.get(ext, "application/octet-stream")
-    return send_file(fp, mimetype=mime, as_attachment=True)
+    return send_file(fp, mimetype=mime_map.get(fp.suffix.lower(), "application/octet-stream"),
+                     as_attachment=True)
 
 
 if __name__ == "__main__":
