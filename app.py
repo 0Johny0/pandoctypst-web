@@ -63,7 +63,6 @@ def _resolve_includes(filepath, depth=0, seen=None):
     for line in filepath.read_text("utf-8").splitlines():
         stripped = line.strip()
 
-        # #include "filename.typ"
         if stripped.startswith("#include"):
             m = re.match(r'#include\s+"([^"]+)"', stripped)
             if m:
@@ -71,7 +70,6 @@ def _resolve_includes(filepath, depth=0, seen=None):
                 lines.append(_resolve_includes(inc_path, depth + 1, seen))
                 continue
 
-        # #import "filename.typ": *
         if stripped.startswith("#import"):
             m = re.match(r'#import\s+"([^"]+)"', stripped)
             if m:
@@ -90,11 +88,54 @@ def _extract_title(content):
     return m.group(1).strip() if m else ""
 
 
+def _extract_cover_image(content, base_dir):
+    """
+    从 Typst 源码中提取第一个 image() 引用的图片路径。
+    匹配模式: image("path/to/img.jpg") 或 image("path", ...)
+    """
+    matches = re.findall(r'image\(\s*"([^"]+)"', content)
+    for match in matches:
+        img_path = (base_dir / match).resolve()
+        if img_path.is_file() and img_path.suffix.lower() in ALLOWED_IMG:
+            return img_path
+    return None
+
+
+def _strip_typst_directives(content):
+    """剥离 #set 指令（含多行括号），消除 pandoc EPUB 输出中的空白章节"""
+    out = []
+    paren_depth = 0
+    for line in content.splitlines():
+        stripped = line.strip()
+        if paren_depth > 0:
+            paren_depth += stripped.count('(') - stripped.count(')')
+            if paren_depth <= 0:
+                paren_depth = 0
+            continue
+        if re.match(r'^#set\b', stripped):
+            d = stripped.count('(') - stripped.count(')')
+            if d > 0:
+                paren_depth = d
+            continue
+        out.append(line)
+    text = '\n'.join(out)
+    return re.sub(r'\n{3,}', '\n\n', text).strip()
+
+
+def _esc_xml(s):
+    """XML 特殊字符转义"""
+    return (s.replace('&', '&amp;')
+             .replace('<', '&lt;')
+             .replace('>', '&gt;')
+             .replace('"', '&quot;'))
+
+
 # ── Page ───────────────────────────────────────────────
 
 @app.route("/")
 def index():
     return render_template("index.html")
+
 
 # ── Image API ─────────────────────────────────────────
 
@@ -104,6 +145,7 @@ def serve_images(filename):
     if not fp.is_file():
         return jsonify({"error": "Not found"}), 404
     return send_file(fp)
+
 
 # ── File API ──────────────────────────────────────────
 
@@ -298,23 +340,65 @@ def export():
             capture_output=True, text=True, timeout=30,
             env=_typst_env(),
         )
+
+    elif target == "epub":
+        # 1. 读取原始内容，提取标题和封面图
+        raw_content = fp.read_text("utf-8")
+        meta_title = _extract_title(raw_content) or stem
+        cover_img = _extract_cover_image(raw_content, fp.parent)
+
+        # 2. 展开 include/import，剥离 #set 指令
+        resolved = _resolve_includes(fp)
+        clean_content = _strip_typst_directives(resolved)
+
+        # 3. 写入 EPUB 元数据 XML
+        epub_meta = OUTPUT / "_epub_meta.xml"
+        epub_meta.write_text(
+            f'<dc:title>{_esc_xml(meta_title)}</dc:title>\n',
+            encoding="utf-8",
+        )
+
+        # 4. 写入自定义 CSS
+        epub_css = OUTPUT / "_epub_style.css"
+        epub_css.write_text(
+            "body { margin: 1em; }\n"
+            "h1 { page-break-before: auto !important; "
+            "page-break-after: avoid; }\n"
+            "h2, h3, h4 { page-break-before: auto; }\n"
+            "section { page-break-before: auto !important; }\n"
+            "nav#toc { page-break-before: auto; "
+            "page-break-after: auto; }\n",
+            encoding="utf-8",
+        )
+
+        # 5. 组装 pandoc 参数
+        pandoc_args = [
+            "pandoc", "-f", "typst", "-o", str(out_path),
+            "--toc",
+            "--toc-title=目录",
+            "--epub-title-page=false",
+            "--epub-metadata", str(epub_meta),
+            "--css", str(epub_css),
+            f"--resource-path={fp.parent}",
+        ]
+
+        # 6. 有封面图则加入参数
+        if cover_img:
+            pandoc_args += ["--epub-cover-image", str(cover_img)]
+
+        result = subprocess.run(
+            pandoc_args,
+            input=clean_content,
+            capture_output=True, text=True, timeout=30,
+        )
+
     else:
         pandoc_args = ["pandoc", str(fp), "-o", str(out_path)]
-
-        if target == "epub":
-            content_text = fp.read_text("utf-8")
-            meta_title = _extract_title(content_text) or stem
-            pandoc_args += [
-                "--toc",
-                "--epub-title-page=false",
-                "--metadata", f"title={meta_title}",
-            ]
-        elif target == "html":
+        if target == "html":
             pandoc_args += ["--syntax-highlighting=tango",
                             "--metadata", f"title={stem}"]
         elif target == "md":
             pandoc_args += ["--wrap=none"]
-
         result = subprocess.run(
             pandoc_args,
             capture_output=True, text=True, timeout=30,
