@@ -204,7 +204,8 @@ def preview():
     content = _resolve_includes(fp)
     result = subprocess.run(
         ["pandoc", "-f", "typst", "-t", "html5",
-         "--wrap=none", "--syntax-highlighting=tango"],
+         "--wrap=none", "--syntax-highlighting=tango",
+         f"--resource-path={fp.parent}"],
         input=content,
         capture_output=True,
         text=True,
