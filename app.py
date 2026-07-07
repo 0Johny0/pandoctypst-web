@@ -45,6 +45,19 @@ def _typst_env():
 def index():
     return render_template("index.html")
 
+# ── Upload API ───────────────────────────────────────────
+
+@app.route("/api/upload", methods=["POST"])
+def upload_file():
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return jsonify({"error": "请选择文件"}), 400
+    name = Path(file.filename).name
+    if not name.endswith(".typ"):
+        return jsonify({"error": "仅支持 .typ 文件"}), 400
+    content = file.read().decode("utf-8")
+    (PROJECTS / name).write_text(content, "utf-8")
+    return jsonify({"success": True, "filename": name})
 
 # ── File API ───────────────────────────────────────────
 
