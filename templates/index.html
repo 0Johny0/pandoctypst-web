@@ -66,34 +66,38 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 /* ── Split ── */
 .split{flex:1;display:flex;min-height:0}
 .editor-pane{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
-
-/* ── Preview ── */
 .preview-pane{flex:1;border-left:1px solid var(--border);background:var(--bg-deep);display:flex;flex-direction:column;min-width:0;overflow:hidden}
-.preview-head{height:32px;min-height:32px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:flex-end;padding:0 8px;gap:0;flex-shrink:0}
-.preview-head button{background:transparent;border:1px solid var(--border);color:var(--text-muted);font-family:var(--font-mono);font-size:.65rem;letter-spacing:.1em;padding:4px 12px;cursor:pointer;transition:all .2s}
-.preview-head button:first-child{border-right:none}
-.preview-head button:hover{color:var(--text)}
-.preview-head button.active{background:var(--accent);border-color:var(--accent);color:var(--bg)}
-.preview-body{flex:1;position:relative;overflow:auto;min-height:0}
-.preview-body iframe{background:#fff}
-.preview-pane .preview-content{padding:28px 32px;font-family:'Noto Serif CJK SC','Noto Serif',Georgia,serif;font-size:14px;line-height:1.8;color:var(--text);max-width:700px}
-.preview-pane .preview-content h1{font-family:var(--font-display);font-size:2rem;font-weight:300;color:var(--accent);margin:1.4em 0 .5em;letter-spacing:.03em}
-.preview-pane .preview-content h2{font-size:1.4rem;font-weight:300;color:var(--accent);margin:1.2em 0 .4em;border-bottom:1px solid var(--border);padding-bottom:4px}
-.preview-pane .preview-content h3{font-size:1.1rem;font-weight:400;margin:1em 0 .3em}
-.preview-pane .preview-content p{margin:.6em 0}
-.preview-pane .preview-content a{color:var(--accent)}
-.preview-pane .preview-content code{font-family:var(--font-mono);font-size:.85em;background:var(--surface);padding:2px 6px;border:1px solid var(--border)}
-.preview-pane .preview-content pre{background:var(--surface);border:1px solid var(--border);padding:14px 18px;overflow-x:auto;margin:1em 0}
-.preview-pane .preview-content pre code{background:none;border:none;padding:0}
-.preview-pane .preview-content blockquote{border-left:3px solid var(--accent);padding-left:16px;color:var(--text-muted);margin:1em 0}
-.preview-pane .preview-content ul,.preview-pane .preview-content ol{padding-left:1.6em;margin:.5em 0}
-.preview-pane .preview-content li{margin:.3em 0}
-.preview-pane .preview-content img{max-width:100%;height:auto}
-.preview-pane .preview-content table{border-collapse:collapse;width:100%;margin:1em 0}
-.preview-pane .preview-content th,.preview-pane .preview-content td{border:1px solid var(--border);padding:8px 12px;text-align:left}
-.preview-pane .preview-content th{background:var(--surface);font-weight:400}
-.preview-pane .preview-content hr{border:none;border-top:1px solid var(--border);margin:2em 0}
-.preview-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.8rem;letter-spacing:.1em;z-index:1}
+
+/* ── Preview Mode Toggle ── */
+.preview-mode-bar{display:flex;gap:4px;padding:6px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.preview-mode-btn{background:transparent;border:1px solid var(--border);color:var(--text-muted);font-family:var(--font-mono);font-size:.62rem;letter-spacing:.1em;padding:3px 14px;cursor:pointer;transition:all .2s;text-transform:uppercase}
+.preview-mode-btn:hover{color:var(--text);border-color:var(--text-muted)}
+.preview-mode-btn.active{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+
+/* ── Preview Body ── */
+.preview-body{flex:1;min-height:0;overflow-y:auto;position:relative}
+.preview-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.8rem;letter-spacing:.1em}
+.preview-content{padding:28px 32px;font-family:'Noto Serif CJK SC','Noto Serif',Georgia,serif;font-size:14px;line-height:1.8;color:var(--text);max-width:700px}
+.preview-content h1{font-family:var(--font-display);font-size:2rem;font-weight:300;color:var(--accent);margin:1.4em 0 .5em;letter-spacing:.03em}
+.preview-content h2{font-size:1.4rem;font-weight:300;color:var(--accent);margin:1.2em 0 .4em;border-bottom:1px solid var(--border);padding-bottom:4px}
+.preview-content h3{font-size:1.1rem;font-weight:400;margin:1em 0 .3em}
+.preview-content p{margin:.6em 0}
+.preview-content a{color:var(--accent)}
+.preview-content code{font-family:var(--font-mono);font-size:.85em;background:var(--surface);padding:2px 6px;border:1px solid var(--border)}
+.preview-content pre{background:var(--surface);border:1px solid var(--border);padding:14px 18px;overflow-x:auto;margin:1em 0}
+.preview-content pre code{background:none;border:none;padding:0}
+.preview-content blockquote{border-left:3px solid var(--accent);padding-left:16px;color:var(--text-muted);margin:1em 0}
+.preview-content ul,.preview-content ol{padding-left:1.6em;margin:.5em 0}
+.preview-content li{margin:.3em 0}
+.preview-content img{max-width:100%;height:auto}
+.preview-content table{border-collapse:collapse;width:100%;margin:1em 0}
+.preview-content th,.preview-content td{border:1px solid var(--border);padding:8px 12px;text-align:left}
+.preview-content th{background:var(--surface);font-weight:400}
+.preview-content hr{border:none;border-top:1px solid var(--border);margin:2em 0}
+
+/* ── PDF Preview ── */
+.preview-pdf-container{position:absolute;inset:0;background:#1a1a1a;display:none}
+.preview-pdf-container iframe{width:100%;height:100%;border:none}
 
 /* ── CodeMirror ── */
 .editor-pane .CodeMirror{height:100%;font-family:var(--font-mono);font-size:13px;line-height:1.65;background:#0e0e0e;color:var(--text)}
@@ -192,14 +196,16 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
         <textarea id="code"></textarea>
       </div>
       <div class="preview-pane">
-        <div class="preview-head">
-          <button class="active" id="btnModeHtml" onclick="switchPreviewMode('html')">HTML</button>
-          <button id="btnModePdf" onclick="switchPreviewMode('pdf')">PDF</button>
+        <div class="preview-mode-bar">
+          <button class="preview-mode-btn active" id="modeHtml" onclick="switchPreviewMode('html')">HTML</button>
+          <button class="preview-mode-btn" id="modePdf" onclick="switchPreviewMode('pdf')">PDF</button>
         </div>
         <div class="preview-body">
           <div class="preview-placeholder" id="placeholder">按 Ctrl+S 保存并预览</div>
           <div class="preview-content" id="previewContent" style="display:none"></div>
-          <iframe id="previewPdf" style="display:none;width:100%;height:100%;border:none"></iframe>
+          <div class="preview-pdf-container" id="previewPdf">
+            <iframe id="pdfFrame"></iframe>
+          </div>
         </div>
       </div>
     </div>
@@ -315,6 +321,31 @@ function onEditorChange(){
   previewTimer=setTimeout(()=>doPreview(),400);
 }
 
+// ── Preview Mode Toggle ────────────────────────────────
+function switchPreviewMode(mode){
+  previewMode=mode;
+  $('modeHtml').classList.toggle('active',mode==='html');
+  $('modePdf').classList.toggle('active',mode==='pdf');
+
+  if(!currentFile){
+    $('previewContent').style.display='none';
+    $('previewPdf').style.display='none';
+    $('placeholder').style.display='flex';
+    return;
+  }
+
+  $('placeholder').style.display='none';
+  if(mode==='html'){
+    $('previewPdf').style.display='none';
+    $('previewContent').style.display='block';
+    doPreview();
+  }else{
+    $('previewContent').style.display='none';
+    $('previewPdf').style.display='block';
+    doPreviewPdf();
+  }
+}
+
 // ── Tab switch ─────────────────────────────────────────
 function switchTab(tab){
   if(tab==='files'){
@@ -329,14 +360,6 @@ function switchTab(tab){
     $('panelFiles').classList.add('hidden');
     refreshImgList();
   }
-}
-
-// ── Preview mode switch ────────────────────────────────
-function switchPreviewMode(mode){
-  previewMode=mode;
-  $('btnModeHtml').classList.toggle('active',mode==='html');
-  $('btnModePdf').classList.toggle('active',mode==='pdf');
-  doPreview();
 }
 
 // ── File list ──────────────────────────────────────────
@@ -365,7 +388,7 @@ async function openFile(name){
   editor.setValue(data.content);
   editor.clearHistory();
   $('currentName').textContent=name;
-  clearError();hideAllPreview();
+  clearError();hidePreview();
   setStatus('已打开 '+name);
   await refreshFileList();
 }
@@ -390,15 +413,10 @@ async function saveAndPreview(){
   await doPreview();
 }
 
-// ── Preview dispatcher ─────────────────────────────────
+// ── Preview (HTML) ─────────────────────────────────────
 async function doPreview(){
   if(!currentFile)return;
-  if(previewMode==='html')await doHtmlPreview();
-  else await doPdfPreview();
-}
-
-// ── HTML preview ───────────────────────────────────────
-async function doHtmlPreview(){
+  if(previewMode==='pdf'){await doPreviewPdf();return}
   setStatus('渲染中…');
   try{
     const resp=await fetch('/api/preview',{
@@ -411,30 +429,25 @@ async function doHtmlPreview(){
       if(data.error){showError(data.error);setStatus('渲染失败','error');return}
     }
     if(!resp.ok){showError('渲染失败');setStatus('渲染失败','error');return}
-    $('previewPdf').style.display='none';
     $('previewContent').innerHTML=await resp.text();
-    $('previewContent').style.display='block';
-    $('placeholder').style.display='none';
-    clearError();setStatus('预览已更新');
+    showPreview();clearError();setStatus('预览已更新');
   }catch(e){showError(e.message);setStatus('渲染失败','error')}
 }
 
-// ── PDF preview ────────────────────────────────────────
-async function doPdfPreview(){
-  setStatus('编译 PDF 预览…');
+// ── Preview (PDF) ──────────────────────────────────────
+async function doPreviewPdf(){
+  if(!currentFile)return;
+  setStatus('生成 PDF 预览…');
   try{
     const resp=await fetch('/api/preview-pdf',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({filename:currentFile}),
     });
     const data=await resp.json();
-    if(data.error){showError(data.error);setStatus('编译失败','error');return}
-    $('previewContent').style.display='none';
-    $('previewPdf').src=data.url;
-    $('previewPdf').style.display='block';
-    $('placeholder').style.display='none';
+    if(data.error){showError(data.error);setStatus('PDF 预览失败','error');return}
+    $('pdfFrame').src=data.url;
     clearError();setStatus('PDF 预览已更新');
-  }catch(e){showError(e.message);setStatus('编译失败','error')}
+  }catch(e){showError(e.message);setStatus('PDF 预览失败','error')}
 }
 
 // ── Export ─────────────────────────────────────────────
@@ -479,7 +492,7 @@ async function doCreateFile(){
 async function deleteFile(name){
   if(!confirm(`确定删除 ${name} ？`))return;
   await fetch(`/api/file/${encodeURIComponent(name)}`,{method:'DELETE'});
-  if(currentFile===name){currentFile=null;editor.setValue('');$('currentName').textContent='未打开文件';hideAllPreview()}
+  if(currentFile===name){currentFile=null;editor.setValue('');$('currentName').textContent='未打开文件';hidePreview()}
   await refreshFileList();
 }
 
@@ -517,12 +530,16 @@ async function deleteImage(name){
 }
 
 // ── Helpers ────────────────────────────────────────────
-function hideAllPreview(){
+function showPreview(){
+  $('placeholder').style.display='none';
+  if(previewMode==='html')$('previewContent').style.display='block';
+}
+function hidePreview(){
   $('previewContent').style.display='none';
   $('previewPdf').style.display='none';
   $('placeholder').style.display='flex';
   $('previewContent').innerHTML='';
-  $('previewPdf').src='';
+  $('pdfFrame').src='';
 }
 function showError(msg){$('errorPanel').style.display='block';$('errorText').textContent=msg}
 function clearError(){$('errorPanel').style.display='none';$('errorText').textContent=''}
