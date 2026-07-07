@@ -1,6 +1,5 @@
 import os
 import subprocess
-import uuid
 from pathlib import Path
 from flask import Flask, request, render_template, send_file, jsonify
 
@@ -8,10 +7,8 @@ app = Flask(__name__)
 
 PROJECTS = Path("/app/projects")
 OUTPUT = Path("/app/output")
-UPLOAD = Path("/app/uploads")
 PROJECTS.mkdir(exist_ok=True)
 OUTPUT.mkdir(exist_ok=True)
-UPLOAD.mkdir(exist_ok=True)
 
 DEFAULT_TYPST = """\
 #set page(width: 10cm, height: auto)
@@ -30,31 +27,23 @@ DEFAULT_TYPST = """\
 在这里开始编写内容。
 """
 
-DEFAULT_MD = """\
-# 标题
-
-这是一个新的 Markdown 文档。
-
-## 二级标题
-
-在这里开始编写内容。
-"""
-
-if not any(PROJECTS.glob("*.typ")) and not any(PROJECTS.glob("*.md")):
+if not any(PROJECTS.glob("*.typ")):
     (PROJECTS / "welcome.typ").write_text(DEFAULT_TYPST, encoding="utf-8")
-    (PROJECTS / "welcome.md").write_text(DEFAULT_MD, encoding="utf-8")
 
 
-# ── Pages ──────────────────────────────────────────────
+def _typst_env():
+    env = {**os.environ}
+    env["TYPST_FONT_PATHS"] = os.environ.get(
+        "TYPST_FONT_PATHS", "/usr/share/fonts"
+    )
+    return env
+
+
+# ── Page ───────────────────────────────────────────────
 
 @app.route("/")
 def index():
     return render_template("index.html")
-
-
-@app.route("/editor")
-def editor_page():
-    return render_template("editor.html")
 
 
 # ── File API ───────────────────────────────────────────
@@ -62,14 +51,13 @@ def editor_page():
 @app.route("/api/files")
 def list_files():
     files = []
-    for ext in ("*.typ", "*.md"):
-        for f in sorted(PROJECTS.glob(ext)):
-            s = f.stat()
-            files.append({
-                "name": f.name,
-                "size": s.st_size,
-                "modified": s.st_mtime,
-            })
+    for f in sorted(PROJECTS.glob("*.typ")):
+        s = f.stat()
+        files.append({
+            "name": f.name,
+            "size": s.st_size,
+            "modified": s.st_mtime,
+        })
     return jsonify(files)
 
 
@@ -84,7 +72,7 @@ def get_file(filename):
 @app.route("/api/file/<path:filename>", methods=["POST"])
 def save_file(filename):
     name = Path(filename).name
-    if not name.endswith((".typ", ".md")):
+    if not name.endswith(".typ"):
         name += ".typ"
     content = request.json.get("content", "")
     (PROJECTS / name).write_text(content, "utf-8")
@@ -102,196 +90,101 @@ def delete_file(filename):
 @app.route("/api/create", methods=["POST"])
 def create_file():
     name = request.json.get("filename", "untitled.typ")
-    if not name.endswith((".typ", ".md")):
+    if not name.endswith(".typ"):
         name += ".typ"
     fp = PROJECTS / name
     if fp.exists():
         return jsonify({"error": "文件已存在"}), 409
-    content = DEFAULT_TYPST if name.endswith(".typ") else DEFAULT_MD
-    fp.write_text(content, "utf-8")
+    fp.write_text(DEFAULT_TYPST, "utf-8")
     return jsonify({"success": True, "filename": name})
 
 
-# ── Preview API ────────────────────────────────────────
+# ── Preview (pandoc typst → HTML, 实时) ───────────────
 
-@app.route("/api/preview/md", methods=["POST"])
-def preview_md():
-    """Markdown → HTML (instant preview)"""
-    content = request.json.get("content", "")
+@app.route("/api/preview", methods=["POST"])
+def preview():
+    filename = request.json.get("filename", "")
+    fp = PROJECTS / filename
+    if not fp.is_file():
+        return jsonify({"error": "文件不存在"}), 404
+
+    content = fp.read_text("utf-8")
     result = subprocess.run(
-        [
-            "pandoc", "-f", "markdown+smart", "-t", "html5",
-            "--wrap=none", "--highlight-style=tango",
-        ],
+        ["pandoc", "-f", "typst", "-t", "html5",
+         "-s", "--wrap=none", "--highlight-style=tango"],
         input=content,
         capture_output=True,
         text=True,
         timeout=10,
     )
     if result.returncode != 0:
-        return result.stderr, 500
+        return jsonify({"error": result.stderr.strip()})
+
     return result.stdout, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
-@app.route("/api/preview/typst", methods=["POST"])
-def preview_typst():
-    """Typst → HTML (compile preview)"""
+# ── Export (编译下载) ──────────────────────────────────
+
+EXPORT_CONFIG = {
+    "pdf":   {"ext": "pdf",  "mime": "application/pdf"},
+    "epub":  {"ext": "epub", "mime": "application/epub+zip"},
+    "html":  {"ext": "html", "mime": "text/html; charset=utf-8"},
+    "docx":  {"ext": "docx", "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+    "md":    {"ext": "md",   "mime": "text/markdown; charset=utf-8"},
+    "latex": {"ext": "tex",  "mime": "application/x-tex; charset=utf-8"},
+}
+
+
+@app.route("/api/export", methods=["POST"])
+def export():
     filename = request.json.get("filename", "")
+    target = request.json.get("target", "")
+    title = request.json.get("title", "")
+
     fp = PROJECTS / filename
     if not fp.is_file():
         return jsonify({"error": "文件不存在"}), 404
-
-    tmp_html = OUTPUT / f"_preview_{Path(filename).stem}.html"
-    env = _typst_env()
-
-    result = subprocess.run(
-        ["typst", "compile", str(fp), str(tmp_html), "--format", "html"],
-        capture_output=True,
-        text=True,
-        timeout=15,
-        env=env,
-    )
-    if result.returncode != 0:
-        return jsonify({"error": result.stderr.strip()})
-
-    html = tmp_html.read_text("utf-8") if tmp_html.exists() else ""
-    tmp_html.unlink(missing_ok=True)
-    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
-
-
-# ── Compile API ────────────────────────────────────────
-
-@app.route("/api/compile", methods=["POST"])
-def compile_pdf():
-    """Compile Typst → PDF"""
-    filename = request.json.get("filename", "")
-    fp = PROJECTS / filename
-    if not fp.is_file():
-        return jsonify({"error": "文件不存在"}), 404
+    if target not in EXPORT_CONFIG:
+        return jsonify({"error": f"不支持: {target}"}), 400
 
     stem = Path(filename).stem
-    pdf_path = OUTPUT / f"{stem}.pdf"
-    env = _typst_env()
+    cfg = EXPORT_CONFIG[target]
+    out_path = OUTPUT / f"{stem}.{cfg['ext']}"
+    doc_title = title or stem
 
-    result = subprocess.run(
-        ["typst", "compile", str(fp), str(pdf_path)],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        env=env,
-    )
+    if target == "pdf":
+        # typst compile → PDF（最高质量）
+        result = subprocess.run(
+            ["typst", "compile", str(fp), str(out_path)],
+            capture_output=True, text=True, timeout=30,
+            env=_typst_env(),
+        )
+    else:
+        # pandoc -f typst → 其它格式
+        pandoc_args = ["pandoc", str(fp), "-o", str(out_path)]
+        if target == "epub":
+            pandoc_args += ["--toc", "--metadata", f"title={doc_title}"]
+        elif target == "html":
+            pandoc_args += ["-s", "--highlight-style=tango",
+                            "--metadata", f"title={doc_title}"]
+        elif target == "md":
+            pandoc_args += ["--wrap=none"]
+        result = subprocess.run(
+            pandoc_args,
+            capture_output=True, text=True, timeout=30,
+        )
+
     if result.returncode != 0:
         return jsonify({"success": False, "error": result.stderr.strip()})
 
-    ts = os.path.getmtime(pdf_path)
-    return jsonify({"success": True, "pdf": f"/dl/{stem}.pdf?t={ts}"})
+    return jsonify({
+        "success": True,
+        "url": f"/dl/{stem}.{cfg['ext']}",
+        "filename": f"{stem}.{cfg['ext']}",
+    })
 
 
-@app.route("/api/compile/epub", methods=["POST"])
-def compile_epub():
-    """Compile to EPUB"""
-    filename = request.json.get("filename", "")
-    fp = PROJECTS / filename
-    if not fp.is_file():
-        return jsonify({"error": "文件不存在"}), 404
-
-    stem = Path(filename).stem
-    epub_path = OUTPUT / f"{stem}.epub"
-    title = request.json.get("title", stem)
-
-    if filename.endswith(".typ"):
-        # typ → html → epub
-        tmp_html = OUTPUT / f"_epub_{stem}.html"
-        env = _typst_env()
-        r1 = subprocess.run(
-            ["typst", "compile", str(fp), str(tmp_html), "--format", "html"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env=env,
-        )
-        if r1.returncode != 0:
-            return jsonify({"success": False, "error": r1.stderr.strip()})
-        r2 = subprocess.run(
-            [
-                "pandoc", str(tmp_html), "-o", str(epub_path),
-                "--toc", "--metadata", f"title={title}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        tmp_html.unlink(missing_ok=True)
-    else:
-        # md / other → epub
-        r2 = subprocess.run(
-            [
-                "pandoc", str(fp), "-o", str(epub_path),
-                "--toc", "--metadata", f"title={title}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-    if r2.returncode != 0:
-        return jsonify({"success": False, "error": r2.stderr.strip()})
-
-    return jsonify({"success": True, "epub": f"/dl/{stem}.epub"})
-
-
-# ── Converter (upload) ─────────────────────────────────
-
-CONVERTERS = {
-    "pdf": lambda i, o: (
-        ["typst", "compile", str(i), str(o)] if i.suffix == ".typ"
-        else ["pandoc", str(i), "-o", str(o)]
-    ),
-    "html": lambda i, o: ["pandoc", str(i), "-o", str(o), "-s"],
-    "docx": lambda i, o: ["pandoc", str(i), "-o", str(o)],
-    "epub": lambda i, o: ["pandoc", str(i), "-o", str(o), "--toc"],
-    "md":   lambda i, o: ["pandoc", str(i), "-o", str(o), "--wrap=none"],
-    "tex":  lambda i, o: ["pandoc", str(i), "-o", str(o)],
-}
-
-TYPST_ONLY = {".typ"}
-
-
-@app.route("/convert", methods=["POST"])
-def convert():
-    file = request.files.get("file")
-    target = request.form.get("target", "")
-    if not file or not file.filename:
-        return jsonify({"error": "请选择文件"}), 400
-
-    ext = Path(file.filename).suffix.lower()
-    if ext in TYPST_ONLY and target != "pdf":
-        return jsonify({"error": "Typst 文件只能转换为 PDF"}), 400
-    if target not in CONVERTERS:
-        return jsonify({"error": f"不支持: {target}"}), 400
-
-    uid = uuid.uuid4().hex[:8]
-    src = UPLOAD / f"{uid}_{file.filename}"
-    file.save(src)
-
-    stem = Path(file.filename).stem
-    out = OUTPUT / f"{stem}.{target}"
-
-    try:
-        cmd = CONVERTERS[target](src, out)
-        r = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120,
-        )
-        if r.returncode != 0:
-            return jsonify({"error": r.stderr or "转换失败"}), 500
-        return send_file(out, as_attachment=True)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        src.unlink(missing_ok=True)
-
-
-# ── Serve output files ─────────────────────────────────
+# ── Serve download ─────────────────────────────────────
 
 @app.route("/dl/<path:filename>")
 def serve_output(filename):
@@ -302,19 +195,13 @@ def serve_output(filename):
     mime_map = {
         ".pdf": "application/pdf",
         ".epub": "application/epub+zip",
+        ".html": "text/html; charset=utf-8",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".md": "text/markdown; charset=utf-8",
+        ".tex": "application/x-tex; charset=utf-8",
     }
     mime = mime_map.get(ext, "application/octet-stream")
     return send_file(fp, mimetype=mime, as_attachment=True)
-
-
-# ── Helpers ─────────────────────────────────────────────
-
-def _typst_env():
-    env = {**os.environ}
-    env["TYPST_FONT_PATHS"] = os.environ.get(
-        "TYPST_FONT_PATHS", "/usr/share/fonts"
-    )
-    return env
 
 
 if __name__ == "__main__":
