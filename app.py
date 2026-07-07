@@ -111,7 +111,7 @@ def preview():
     content = fp.read_text("utf-8")
     result = subprocess.run(
         ["pandoc", "-f", "typst", "-t", "html5",
-         "-s", "--wrap=none", "--highlight-style=tango"],
+         "--wrap=none", "--highlight-style=tango"],
         input=content,
         capture_output=True,
         text=True,
